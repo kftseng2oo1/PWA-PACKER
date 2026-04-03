@@ -8,8 +8,8 @@
             <feDropShadow dx="0" dy="0.5" stdDeviation="0.8" flood-color="rgba(0,0,0,0.7)"></feDropShadow>
           </filter>
         </defs>
-        <rect id="elRect" x="0.5" y="0.5" width="23" height="23" rx="3.64" ry="3.64" fill="#2d2fa9" stroke="#ffffff" stroke-width="0.6"></rect>
+        <rect id="elRect" x="0.5" y="0.5" width="23" height="23" rx="8.12" ry="8.12" fill="#010034" stroke="#ffffff" stroke-width="0.6"></rect>
         <circle id="elCirc" cx="12" cy="12" r="11.5" fill="#8d8eff" style="display:none"></circle>
-        <path id="elGeo" d="M12.000,3.500L14.277,6.503L18.010,5.990L17.497,9.723L20.500,12.000L17.497,14.277L18.010,18.010L14.277,17.497L12.000,20.500L9.723,17.497L5.990,18.010L6.503,14.277L3.500,12.000L6.503,9.723L5.990,5.990L9.723,6.503Z" fill="url(#g1)"></path>
-        <g id="elSlot"><text x="12" y="12" dy="0.38em" text-anchor="middle" font-weight="900" font-size="3.39" fill="#FFFFFF">PWA</text></g>
+        <path id="elGeo" d="M12.000,3.500L13.676,6.291L16.595,4.849L16.497,8.104L19.732,8.469L17.889,11.153L20.413,13.210L17.412,14.472L18.424,17.566L15.217,17.005L14.395,20.156L12.000,17.950L9.605,20.156L8.783,17.005L5.576,17.566L6.588,14.472L3.587,13.210L6.111,11.153L4.268,8.469L7.503,8.104L7.405,4.849L10.324,6.291Z" fill="url(#g1)"></path>
+        <g id="elSlot"><path d="M12,2 L14.196,7.804 20,6 16.196,11 20,16 14.196,14.196 12,20 9.804,14.196 4,16 7.804,11 4,6 9.804,7.804Z" fill="#FFFF00" transform="translate(6.600,6.600) scale(0.45)"></path></g>
       </svg>

@@ -1,6 +1,6 @@
 {
-  "name": "PWA-PACKER",
-  "short_name": "PWA",
+  "name": "My PWA App",
+  "short_name": "MyApp",
   "description": "",
   "start_url": "/PWA-PACKER/",
   "scope": "/PWA-PACKER/",
@@ -14,8 +14,8 @@
   ],
   "shortcuts": [
     {
-      "name": "開啟 PWA",
-      "short_name": "PWA",
+      "name": "開啟 MyApp",
+      "short_name": "MyApp",
       "url": "/PWA-PACKER/",
       "icons": [
         {
