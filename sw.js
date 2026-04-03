@@ -4,13 +4,13 @@
 
 const CACHE_NAME = 'pwa-v1';
 const PRECACHE_URLS = [
-    "/index.html",
-    "/sw.js",
-    "/manifest.json",
-    "/icon.svg",
-    "/offline.html",
-    "/icon-192.png",
-    "/icon-512.png"
+    "/PWA-PACKER/index.html",
+    "/PWA-PACKER/sw.js",
+    "/PWA-PACKER/manifest.json",
+    "/PWA-PACKER/icon.svg",
+    "/PWA-PACKER/offline.html",
+    "/PWA-PACKER/icon-192.png",
+    "/PWA-PACKER/icon-512.png"
 ];
 
 // Install: pre-cache assets
@@ -59,7 +59,7 @@ self.addEventListener('fetch', event => {
             return response;
           }).catch(() => null);
 
-          return cached || fetchPromise || caches.match('/offline.html');
+          return cached || fetchPromise || caches.match('/PWA-PACKER/offline.html');
         })
       )
     );
@@ -77,7 +77,7 @@ self.addEventListener('fetch', event => {
           return response;
         }).catch(() => {
           if (event.request.destination === 'document') {
-            return caches.match('/offline.html');
+            return caches.match('/PWA-PACKER/offline.html');
           }
         });
       })

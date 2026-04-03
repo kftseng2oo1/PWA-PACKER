@@ -2,8 +2,8 @@
   "name": "PWA-PACKER",
   "short_name": "PWA",
   "description": "",
-  "start_url": "/",
-  "scope": "/",
+  "start_url": "/PWA-PACKER/",
+  "scope": "/PWA-PACKER/",
   "display": "standalone",
   "orientation": "any",
   "theme_color": "#1a73e8",
@@ -16,7 +16,7 @@
     {
       "name": "開啟 PWA",
       "short_name": "PWA",
-      "url": "/",
+      "url": "/PWA-PACKER/",
       "icons": [
         {
           "src": "icon-192.png",
