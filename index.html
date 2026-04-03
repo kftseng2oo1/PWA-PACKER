@@ -1,5 +1,6 @@
 <!DOCTYPE html>
-<html lang="zh-TW"><head><!-- PWA Meta — auto-injected by PWA 打包神器 -->
+<html lang="zh-TW">
+<head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>PWA 打包神器</title>
@@ -552,14 +553,7 @@
   /* hint */
   .hint { font-size: 0.73rem; color: var(--text-dim); margin-top: 4px; font-family: var(--mono); }
 </style>
-<meta name="application-name" content="PWA-PACKER"><meta name="description" content=""><meta name="theme-color" content="#1a73e8"><meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-status-bar-style" content="default"><meta name="apple-mobile-web-app-title" content="PWA"><link rel="manifest" href="manifest.json"><link rel="apple-touch-icon" href="icon.svg"><script>
-  if ('serviceWorker' in navigator) {
-    window.addEventListener('load', () => {
-      navigator.serviceWorker.register('sw.js')
-        .then(r => console.log('[SW] registered:', r.scope))
-        .catch(e => console.warn('[SW] registration failed:', e));
-    });
-  }</script></head>
+</head>
 <body>
 
 <div class="container">
@@ -646,7 +640,7 @@
       <div class="field">
         <label>顯示模式（display）</label>
         <select id="cfg-display">
-          <option value="standalone" selected="">standalone（全螢幕 App）</option>
+          <option value="standalone" selected>standalone（全螢幕 App）</option>
           <option value="fullscreen">fullscreen（完整全螢幕）</option>
           <option value="minimal-ui">minimal-ui（最小 UI）</option>
           <option value="browser">browser（一般瀏覽器）</option>
@@ -656,7 +650,7 @@
       <div class="field">
         <label>方向（orientation）</label>
         <select id="cfg-orient">
-          <option value="any" selected="">any（自動）</option>
+          <option value="any" selected>any（自動）</option>
           <option value="portrait">portrait（直向）</option>
           <option value="landscape">landscape（橫向）</option>
         </select>
@@ -688,17 +682,17 @@
     <div class="card-title">🔧 03 &nbsp;進階選項</div>
     <div class="toggle-grid">
       <label class="toggle">
-        <input type="checkbox" id="opt-inline-icon" checked="">
+        <input type="checkbox" id="opt-inline-icon" checked>
         <span class="toggle-box">✓</span>
         inline icon（Base64 嵌入 manifest）
       </label>
       <label class="toggle">
-        <input type="checkbox" id="opt-offline" checked="">
+        <input type="checkbox" id="opt-offline" checked>
         <span class="toggle-box">✓</span>
         離線頁面（offline.html）
       </label>
       <label class="toggle">
-        <input type="checkbox" id="opt-readme" checked="">
+        <input type="checkbox" id="opt-readme" checked>
         <span class="toggle-box">✓</span>
         生成 README.md
       </label>
@@ -708,12 +702,12 @@
         生成 .gitignore
       </label>
       <label class="toggle">
-        <input type="checkbox" id="opt-nojekyll" checked="">
+        <input type="checkbox" id="opt-nojekyll" checked>
         <span class="toggle-box">✓</span>
         .nojekyll（GitHub Pages 用）
       </label>
       <label class="toggle">
-        <input type="checkbox" id="opt-inject-meta" checked="">
+        <input type="checkbox" id="opt-inject-meta" checked>
         <span class="toggle-box">✓</span>
         自動注入 PWA meta 標籤
       </label>
@@ -769,7 +763,749 @@
 
 <div class="toast" id="toast"></div>
 
+<script>
+// ─── State ──────────────────────────────────────────────
+let htmlContent = '';
+let svgContent  = '';
+let generatedFiles = {};
+let cacheTags = [];
+
+// ─── Color pickers sync ──────────────────────────────────
+document.getElementById('cfg-theme-picker').addEventListener('input', e => {
+  document.getElementById('cfg-theme').value = e.target.value;
+});
+document.getElementById('cfg-theme').addEventListener('input', e => {
+  if (/^#[0-9a-fA-F]{6}$/.test(e.target.value))
+    document.getElementById('cfg-theme-picker').value = e.target.value;
+});
+document.getElementById('cfg-bg-picker').addEventListener('input', e => {
+  document.getElementById('cfg-bg').value = e.target.value;
+});
+document.getElementById('cfg-bg').addEventListener('input', e => {
+  if (/^#[0-9a-fA-F]{6}$/.test(e.target.value))
+    document.getElementById('cfg-bg-picker').value = e.target.value;
+});
+
+// ─── Tag input ───────────────────────────────────────────
+const tagInput = document.getElementById('cache-tag-input');
+tagInput.addEventListener('keydown', e => {
+  if (e.key === 'Enter' || e.key === ',') {
+    e.preventDefault();
+    const v = tagInput.value.trim();
+    if (v && !cacheTags.includes(v)) {
+      cacheTags.push(v);
+      renderTags();
+    }
+    tagInput.value = '';
+  }
+});
+
+function renderTags() {
+  const wrap = document.getElementById('cache-tags-wrap');
+  wrap.querySelectorAll('.tag').forEach(t => t.remove());
+  cacheTags.forEach((tag, i) => {
+    const el = document.createElement('span');
+    el.className = 'tag';
+    el.innerHTML = `${tag} <span class="tag-remove" onclick="removeTag(${i})">×</span>`;
+    wrap.insertBefore(el, tagInput);
+  });
+}
+
+function removeTag(i) {
+  cacheTags.splice(i, 1);
+  renderTags();
+}
+
+// ─── File upload ─────────────────────────────────────────
+function setupUpload(inputId, zoneId, statusId, type) {
+  const input = document.getElementById(inputId);
+  const zone  = document.getElementById(zoneId);
+  const status = document.getElementById(statusId);
+
+  input.addEventListener('change', e => handleFile(e.target.files[0], type, zone, status));
+
+  zone.addEventListener('dragover', e => { e.preventDefault(); zone.classList.add('drag'); });
+  zone.addEventListener('dragleave', () => zone.classList.remove('drag'));
+  zone.addEventListener('drop', e => {
+    e.preventDefault();
+    zone.classList.remove('drag');
+    handleFile(e.dataTransfer.files[0], type, zone, status);
+  });
+}
+
+function handleFile(file, type, zone, status) {
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = e => {
+    const content = e.target.result;
+    if (type === 'html') {
+      htmlContent = content;
+      status.textContent = `✓ ${file.name} (${formatSize(file.size)})`;
+    } else {
+      svgContent = content;
+      status.textContent = `✓ ${file.name} (${formatSize(file.size)})`;
+    }
+    status.className = 'upload-status ok';
+    zone.classList.add('loaded');
+    updateStepIndicator();
+  };
+  reader.readAsText(file);
+}
+
+setupUpload('file-html', 'zone-html', 'status-html', 'html');
+setupUpload('file-svg',  'zone-svg',  'status-svg',  'svg');
+
+function formatSize(bytes) {
+  if (bytes < 1024) return bytes + 'B';
+  if (bytes < 1024*1024) return (bytes/1024).toFixed(1) + 'KB';
+  return (bytes/1024/1024).toFixed(1) + 'MB';
+}
+
+function updateStepIndicator() {
+  const s1 = document.getElementById('step1');
+  const s2 = document.getElementById('step2');
+  if (htmlContent) {
+    s1.classList.add('done');
+    s2.classList.add('active');
+  }
+}
+
+// ─── SVG → PNG (Canvas) multi-size ───────────────────────
+function svgToPngBase64(svgStr, size) {
+  return new Promise((resolve, reject) => {
+    const canvas = document.createElement('canvas');
+    canvas.width = canvas.height = size;
+    const ctx = canvas.getContext('2d');
+    const img = new Image();
+
+    img.onload = () => {
+      try {
+        ctx.drawImage(img, 0, 0, size, size);
+        resolve(canvas.toDataURL('image/png').split(',')[1]);
+      } catch(e) { reject(e); }
+    };
+    img.onerror = reject;
+
+    // Use data URI instead of Blob URL — works in iOS WebView
+    const b64svg = btoa(unescape(encodeURIComponent(svgStr)));
+    img.src = 'data:image/svg+xml;base64,' + b64svg;
+  });
+}
+
+// ─── Core: Generate files ─────────────────────────────────
+async function packPWA() {
+  if (!htmlContent) {
+    showToast('⚠ 請先上傳 HTML 檔案！', '#f59e0b');
+    return;
+  }
+
+  // Scope validation
+  const scopeRaw = document.getElementById('cfg-scope').value.trim() || '/';
+  const scope = scopeRaw.endsWith('/') ? scopeRaw : scopeRaw + '/';
+  if (scope !== scopeRaw) {
+    showToast('💡 scope 已自動補上結尾 /', '#f59e0b');
+    document.getElementById('cfg-scope').value = scope;
+  }
+  if (scope !== '/' && !scope.startsWith('/')) {
+    showToast('⚠ scope 必須以 / 開頭，例如 /my-repo/', '#ef4444');
+    return;
+  }
+
+  const cfg = {
+    name:    document.getElementById('cfg-name').value || 'My PWA',
+    short:   document.getElementById('cfg-short').value || 'App',
+    desc:    document.getElementById('cfg-desc').value || '',
+    theme:   document.getElementById('cfg-theme').value || '#1a73e8',
+    bg:      document.getElementById('cfg-bg').value || '#ffffff',
+    display: document.getElementById('cfg-display').value,
+    orient:  document.getElementById('cfg-orient').value,
+    lang:    document.getElementById('cfg-lang').value || 'zh-TW',
+    scope,
+  };
+
+  const opts = {
+    inlineIcon: document.getElementById('opt-inline-icon').checked,
+    offline:    document.getElementById('opt-offline').checked,
+    readme:     document.getElementById('opt-readme').checked,
+    gitignore:  document.getElementById('opt-gitignore').checked,
+    nojekyll:   document.getElementById('opt-nojekyll').checked,
+    injectMeta: document.getElementById('opt-inject-meta').checked,
+  };
+
+  const btn = document.getElementById('btn-pack');
+  btn.disabled = true;
+  btn.innerHTML = '<span>⏳</span> 生成中（轉換圖示）…';
+
+  const userCacheUrls = cacheTags.length > 0 ? cacheTags : [
+    cfg.scope + 'index.html',
+    cfg.scope + 'sw.js',
+    cfg.scope + 'manifest.json',
+    cfg.scope + 'icon.svg',
+  ];
+  if (opts.offline) userCacheUrls.push(cfg.scope + 'offline.html');
+
+  generatedFiles = {};
+
+  // ── 1. SVG → PNG icons (Canvas) ───────────────────────
+  const svgSrc = svgContent || generateDefaultSVG(cfg);
+  let iconEntries = [
+    { src: 'icon.svg', sizes: 'any', type: 'image/svg+xml', purpose: 'any' },
+    { src: 'icon-maskable.svg', sizes: 'any', type: 'image/svg+xml', purpose: 'maskable' },
+  ];
+
+  try {
+    const [png192, png512] = await Promise.all([
+      svgToPngBase64(svgSrc, 192),
+      svgToPngBase64(svgSrc, 512),
+    ]);
+    generatedFiles['icon-192.png'] = png192; // stored as base64, note below
+    generatedFiles['icon-512.png'] = png512;
+    iconEntries = [
+      { src: 'icon.svg',       sizes: 'any',     type: 'image/svg+xml', purpose: 'any' },
+      { src: 'icon-maskable.svg', sizes: 'any',  type: 'image/svg+xml', purpose: 'maskable' },
+      { src: 'icon-192.png',   sizes: '192x192', type: 'image/png',     purpose: 'any' },
+      { src: 'icon-512.png',   sizes: '512x512', type: 'image/png',     purpose: 'maskable' },
+    ];
+    userCacheUrls.push(cfg.scope + 'icon-192.png', cfg.scope + 'icon-512.png');
+  } catch(e) {
+    console.warn('[packer] PNG conversion failed, SVG-only icons');
+  }
+
+  // ── 2. manifest.json (with categories + shortcuts) ────
+  const manifest = {
+    name:             cfg.name,
+    short_name:       cfg.short,
+    description:      cfg.desc,
+    start_url:        cfg.scope,
+    scope:            cfg.scope,
+    display:          cfg.display,
+    orientation:      cfg.orient,
+    theme_color:      cfg.theme,
+    background_color: cfg.bg,
+    lang:             cfg.lang,
+    categories:       ['utilities'],
+    shortcuts: [
+      {
+        name:      '開啟 ' + cfg.short,
+        short_name: cfg.short,
+        url:       cfg.scope,
+        icons:     [{ src: 'icon-192.png', sizes: '192x192' }],
+      }
+    ],
+    icons: iconEntries,
+  };
+  generatedFiles['manifest.json'] = JSON.stringify(manifest, null, 2);
+
+  // ── 3. sw.js ──────────────────────────────────────────
+  const cacheKey = `${cfg.short.replace(/\s/g,'-').toLowerCase()}-v1`;
+  generatedFiles['sw.js'] = generateSW(cacheKey, userCacheUrls, opts.offline, cfg.scope);
+
+  // ── 4. index.html ─────────────────────────────────────
+  generatedFiles['index.html'] = generateIndexHTML(htmlContent, cfg, opts);
+
+  // ── 5. icon.svg + maskable variant ───────────────────
+  generatedFiles['icon.svg'] = svgSrc;
+  generatedFiles['icon-maskable.svg'] = generateMaskableSVG(svgSrc, cfg);
+
+  // ── 6. offline.html ───────────────────────────────────
+  if (opts.offline) {
+    generatedFiles['offline.html'] = generateOfflinePage(cfg);
+  }
+
+  // ── 7. README.md ──────────────────────────────────────
+  if (opts.readme) {
+    generatedFiles['README.md'] = generateReadme(cfg, Object.keys(generatedFiles));
+  }
+
+  // ── 8. .gitignore ─────────────────────────────────────
+  if (opts.gitignore) {
+    generatedFiles['.gitignore'] = `.DS_Store\nThumbs.db\n*.log\nnode_modules/\n.env\n`;
+  }
+
+  // ── 9. .nojekyll ──────────────────────────────────────
+  if (opts.nojekyll) {
+    generatedFiles['.nojekyll'] = '';
+  }
+
+  btn.disabled = false;
+  btn.innerHTML = '<span>🚀</span> 生成 PWA 打包檔案';
+
+  renderOutput();
+  document.getElementById('step3').classList.add('active');
+  showToast('✓ 打包完成！共生成 ' + Object.keys(generatedFiles).length + ' 個檔案');
+}
+
+// ─── Generate SW ─────────────────────────────────────────
+function generateSW(cacheKey, urls, hasOffline, scope) {
+  const urlList = JSON.stringify(urls, null, 4);
+  return `// Service Worker — auto-generated by PWA 打包神器
+// Cache key: ${cacheKey}
+// Strategy: Stale-While-Revalidate (HTML) + Cache-First (assets)
+
+const CACHE_NAME = '${cacheKey}';
+const PRECACHE_URLS = ${urlList};
+
+// Install: pre-cache assets
+self.addEventListener('install', event => {
+  event.waitUntil(
+    caches.open(CACHE_NAME).then(cache => {
+      return cache.addAll(PRECACHE_URLS).catch(err => {
+        console.warn('[SW] Pre-cache partial failure:', err);
+      });
+    }).then(() => self.skipWaiting())
+  );
+});
+
+// Activate: clean old caches
+self.addEventListener('activate', event => {
+  event.waitUntil(
+    caches.keys().then(keys =>
+      Promise.all(
+        keys.filter(k => k !== CACHE_NAME)
+            .map(k => caches.delete(k))
+      )
+    ).then(() => self.clients.claim())
+  );
+});
+
+// Fetch strategy:
+//   HTML documents → Stale-While-Revalidate（先給舊的，背景更新）
+//   其他資源      → Cache-First（快取優先，離線可用）
+self.addEventListener('fetch', event => {
+  if (event.request.method !== 'GET') return;
+  const url = new URL(event.request.url);
+  if (url.protocol === 'chrome-extension:') return;
+
+  const isDocument = event.request.destination === 'document' ||
+                     event.request.headers.get('accept')?.includes('text/html');
+
+  if (isDocument) {
+    // Stale-While-Revalidate for HTML
+    event.respondWith(
+      caches.open(CACHE_NAME).then(cache =>
+        cache.match(event.request).then(cached => {
+          const fetchPromise = fetch(event.request).then(response => {
+            if (response && response.status === 200) {
+              cache.put(event.request, response.clone());
+            }
+            return response;
+          }).catch(() => null);
+
+          return cached || fetchPromise || ${hasOffline ? `caches.match('${scope}offline.html')` : 'Promise.resolve(new Response("Offline", {status: 503}))'};
+        })
+      )
+    );
+  } else {
+    // Cache-First for assets
+    event.respondWith(
+      caches.match(event.request).then(cached => {
+        if (cached) return cached;
+        return fetch(event.request).then(response => {
+          if (!response || response.status !== 200 || response.type === 'opaque') {
+            return response;
+          }
+          const cloned = response.clone();
+          caches.open(CACHE_NAME).then(cache => cache.put(event.request, cloned));
+          return response;
+        }).catch(() => {
+          ${hasOffline ? `if (event.request.destination === 'document') {
+            return caches.match('${scope}offline.html');
+          }` : '// offline — no asset fallback'}
+        });
+      })
+    );
+  }
+});
+`;
+}
+
+// ─── Inject PWA meta into HTML (DOMParser — safe dedup) ──
+function generateIndexHTML(raw, cfg, opts) {
+  if (!opts.injectMeta) return raw;
+
+  const parser = new DOMParser();
+  const doc = parser.parseFromString(raw, 'text/html');
+
+  // Remove duplicates first
+  [
+    'link[rel="manifest"]',
+    'link[rel="apple-touch-icon"]',
+    'meta[name="theme-color"]',
+    'meta[name="application-name"]',
+    'meta[name="mobile-web-app-capable"]',
+    'meta[name="apple-mobile-web-app-capable"]',
+    'meta[name="apple-mobile-web-app-status-bar-style"]',
+    'meta[name="apple-mobile-web-app-title"]',
+    'meta[name="description"]',
+  ].forEach(sel => doc.querySelectorAll(sel).forEach(el => el.remove()));
+
+  // Remove existing SW register script (detect by content)
+  doc.querySelectorAll('script').forEach(s => {
+    if (s.textContent.includes('serviceWorker') && s.textContent.includes('sw.js'))
+      s.remove();
+  });
+
+  function addMeta(attrs) {
+    const el = doc.createElement('meta');
+    Object.entries(attrs).forEach(([k,v]) => el.setAttribute(k, v));
+    doc.head.appendChild(el);
+  }
+  function addLink(attrs) {
+    const el = doc.createElement('link');
+    Object.entries(attrs).forEach(([k,v]) => el.setAttribute(k, v));
+    doc.head.appendChild(el);
+  }
+
+  addMeta({ name: 'application-name',                  content: cfg.name });
+  addMeta({ name: 'description',                        content: cfg.desc });
+  addMeta({ name: 'theme-color',                        content: cfg.theme });
+  addMeta({ name: 'mobile-web-app-capable',             content: 'yes' });
+  addMeta({ name: 'apple-mobile-web-app-capable',       content: 'yes' });
+  addMeta({ name: 'apple-mobile-web-app-status-bar-style', content: 'default' });
+  addMeta({ name: 'apple-mobile-web-app-title',         content: cfg.short });
+  addLink({ rel: 'manifest',         href: 'manifest.json' });
+  addLink({ rel: 'apple-touch-icon', href: 'icon.svg' });
+
+  // Inject SW registration as last script in head
+  const swScript = doc.createElement('script');
+  swScript.textContent = `
+  if ('serviceWorker' in navigator) {
+    window.addEventListener('load', () => {
+      navigator.serviceWorker.register('sw.js')
+        .then(r => console.log('[SW] registered:', r.scope))
+        .catch(e => console.warn('[SW] registration failed:', e));
+    });
+  }`;
+  doc.head.appendChild(swScript);
+
+  // Inject comment marker
+  const comment = doc.createComment(' PWA Meta — auto-injected by PWA 打包神器 ');
+  doc.head.insertBefore(comment, doc.head.firstChild);
+
+  return '<!DOCTYPE html>\n' + doc.documentElement.outerHTML;
+}
+
+function esc(s) { return (s||'').replace(/"/g, '&quot;'); }
+
+// ─── Offline page ─────────────────────────────────────────
+function generateOfflinePage(cfg) {
+  return `<!DOCTYPE html>
+<html lang="${cfg.lang}">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>離線中 — ${cfg.name}</title>
+<style>
+  body { margin:0; display:flex; align-items:center; justify-content:center; min-height:100vh;
+         font-family: system-ui, sans-serif; background: #0f172a; color: #94a3b8; text-align:center; }
+  .box { padding: 40px; }
+  .icon { font-size: 4rem; margin-bottom: 16px; }
+  h1 { color: #e2e8f0; margin: 0 0 8px; font-size: 1.5rem; }
+  p { margin: 0; font-size: 0.95rem; }
+  button { margin-top: 24px; padding: 12px 28px; background: ${cfg.theme};
+           color: #fff; border: none; border-radius: 8px; font-size: 1rem; cursor: pointer; }
+</style>
+</head>
+<body>
+<div class="box">
+  <div class="icon">📡</div>
+  <h1>目前離線</h1>
+  <p>請檢查網路連線後再試</p>
+  <button onclick="location.reload()">重新整理</button>
+</div>
+</body>
+</html>`;
+}
+
+// ─── Maskable SVG (safe zone padding) ────────────────────
+function generateMaskableSVG(svgSrc, cfg) {
+  // Wrap original SVG in a padded coloured background (safe zone = 80% of canvas)
+  const bg = cfg.theme || '#1a73e8';
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <rect width="512" height="512" fill="${bg}"/>
+  <image href="data:image/svg+xml;base64,${btoa(unescape(encodeURIComponent(svgSrc)))}"
+         x="51" y="51" width="410" height="410"/>
+</svg>`;
+}
 
 
+function generateDefaultSVG(cfg) {
+  const c = cfg.theme || '#1a73e8';
+  const letter = (cfg.short || cfg.name || 'A')[0].toUpperCase();
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <rect width="512" height="512" rx="112" fill="${c}"/>
+  <text x="256" y="340" text-anchor="middle" font-size="280" font-family="system-ui,sans-serif"
+        font-weight="bold" fill="white">${letter}</text>
+</svg>`;
+}
 
-</body></html>
+// ─── README ───────────────────────────────────────────────
+function generateReadme(cfg, files) {
+  const fileList = files.map(f => `- \`${f}\``).join('\n');
+  return `# ${cfg.name}
+
+> ${cfg.desc || '一個 Progressive Web App'}
+
+## 📦 包含檔案
+
+${fileList}
+
+## 🚀 部署到 GitHub Pages
+
+\`\`\`bash
+git init
+git add .
+git commit -m "init: ${cfg.name} PWA"
+git branch -M main
+git remote add origin https://github.com/<username>/<repo>.git
+git push -u origin main
+\`\`\`
+
+然後在 GitHub repo → **Settings → Pages** → Source 選 \`main\` 分支，等待幾分鐘後即可訪問。
+
+## 📱 安裝 PWA
+
+在支援的瀏覽器（Chrome / Edge / Safari iOS）中打開網頁，  
+點擊「**安裝**」或「**加入主畫面**」即可將此 App 安裝到裝置。
+
+## ⚙ 技術規格
+
+| 項目 | 值 |
+|------|-----|
+| display | ${cfg.display} |
+| theme_color | ${cfg.theme} |
+| lang | ${cfg.lang} |
+| scope | ${cfg.scope} |
+
+---
+*由 [PWA 打包神器](https://github.com) 自動生成*
+`;
+}
+
+// ─── Render output ────────────────────────────────────────
+const fileIcons = {
+  'index.html':        '🌐',
+  'sw.js':             '⚙',
+  'manifest.json':     '📋',
+  'icon.svg':          '🎨',
+  'icon-maskable.svg': '🛡',
+  'icon-192.png':      '🖼',
+  'icon-512.png':      '🖼',
+  'offline.html':      '📡',
+  'README.md':         '📖',
+  '.gitignore':        '🙈',
+  '.nojekyll':         '🔧',
+};
+
+function renderOutput() {
+  const grid = document.getElementById('output-grid');
+  grid.innerHTML = '';
+  for (const [name] of Object.entries(generatedFiles)) {
+    const isPng = name.endsWith('.png');
+    const content = generatedFiles[name];
+    const size = isPng ? Math.round(content.length * 0.75) : new Blob([content]).size;
+    const chip = document.createElement('div');
+    chip.className = 'file-chip';
+    chip.style.cursor = 'default';
+    const previewFn = isPng
+      ? `previewPng('${name}')`
+      : `previewFile('${name}',generatedFiles['${name}'])`;
+    chip.innerHTML = `
+      <span class="file-chip-icon">${fileIcons[name] || '📄'}</span>
+      <span class="file-chip-name">${name}</span>
+      <span class="file-chip-size">${formatSize(size)}</span>
+      <div style="display:flex;gap:6px;margin-top:6px">
+        <span class="chip-btn" onclick="event.stopPropagation();${previewFn}">👁 預覽</span>
+        <span class="chip-btn chip-dl" onclick="event.stopPropagation();downloadFileFull('${name}');showToast('⬇ ${name}')">⬇ 下載</span>
+      </div>
+    `;
+    grid.appendChild(chip);
+  }
+  document.getElementById('output-section').style.display = 'block';
+  document.getElementById('output-section').scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+// ─── Preview modal ────────────────────────────────────────
+function previewFile(name, content) {
+  document.getElementById('modal-title').textContent = name;
+  document.getElementById('modal-content').textContent = content.length > 8000
+    ? content.slice(0, 8000) + '\n\n... (檔案過長，已截斷顯示)'
+    : content;
+  document.getElementById('modal-dl-btn').onclick = () => downloadFileFull(name);
+  document.getElementById('modal-dl-btn').style.display = '';
+  document.getElementById('modal').classList.add('open');
+}
+
+function previewPng(name) {
+  const b64 = generatedFiles[name];
+  document.getElementById('modal-title').textContent = name;
+  document.getElementById('modal-content').innerHTML =
+    `<img src="data:image/png;base64,${b64}" style="max-width:100%;display:block;margin:auto;image-rendering:pixelated">`;
+  document.getElementById('modal-dl-btn').onclick = () => downloadFileFull(name);
+  document.getElementById('modal-dl-btn').style.display = '';
+  document.getElementById('modal').classList.add('open');
+}
+
+function closeModal() {
+  document.getElementById('modal').classList.remove('open');
+  document.getElementById('modal-content').textContent = '';
+  document.getElementById('modal-content').innerHTML = '';
+}
+
+document.getElementById('modal').addEventListener('click', e => {
+  if (e.target === e.currentTarget) closeModal();
+});
+
+// ─── Download ────────────────────────────────────────────
+function downloadFileFull(name) {
+  const content = generatedFiles[name];
+  if (!content && content !== '') return;
+  const isPng = name.endsWith('.png');
+  downloadFile(name, content, isPng);
+}
+
+function downloadFile(name, content, isPng = false) {
+  const isIOS = /iPhone|iPad|iPod/i.test(navigator.userAgent);
+
+  if (isPng) {
+    // PNG: convert base64 → data URI
+    const uri = 'data:image/png;base64,' + content;
+    const a = document.createElement('a');
+    a.href = uri; a.download = name;
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    return;
+  }
+
+  if (isIOS) {
+    // iOS: show in-page copy modal
+    showIOSModal(name, content);
+    return;
+  }
+
+  // Desktop: blob download
+  const mime = name.endsWith('.json') ? 'application/json'
+             : name.endsWith('.svg')  ? 'image/svg+xml'
+             : 'text/plain';
+  const blob = new Blob([content], { type: mime + ';charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = name;
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+function showIOSModal(name, content) {
+  // 彈出全文讓使用者手動複製
+  document.getElementById('modal-title').textContent = '📋 長按全選→複製 → 存為 ' + name;
+  document.getElementById('modal-content').textContent = content;
+  document.getElementById('modal-dl-btn').style.display = 'none';
+  document.getElementById('modal').classList.add('open');
+}
+
+function downloadAll() {
+  const isIOS = /iPhone|iPad|iPod/i.test(navigator.userAgent);
+
+  if (isIOS) {
+    // iOS: 生成一個「部署包」HTML，開新分頁，使用者可長按→分享→儲存至檔案
+    generateDeployPage();
+    return;
+  }
+
+  // 桌面：逐一下載
+  const entries = Object.entries(generatedFiles);
+  entries.forEach(([name], i) => {
+    setTimeout(() => downloadFileFull(name), i * 300);
+  });
+  showToast(`⬇ 正在下載 ${entries.length} 個檔案…`);
+}
+
+function generateDeployPage() {
+  const files = Object.entries(generatedFiles);
+  const sections = files.map(([name, content]) => {
+    const escaped = content.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+    const id = 'dp-' + name.replace(/[^a-zA-Z0-9]/g,'-');
+    return `
+    <div style="margin-bottom:16px;border:1px solid #1e2d45;border-radius:10px;overflow:hidden">
+      <div style="display:flex;align-items:center;justify-content:space-between;
+                  padding:10px 14px;background:#111827;border-bottom:1px solid #1e2d45">
+        <span style="font-family:monospace;font-size:.82rem;color:#7c3aed">${fileIcons[name]||'📄'} ${name}</span>
+        <button onclick="dpCopy('${id}',this)"
+          style="background:#00d4ff;color:#0a0e1a;border:none;border-radius:6px;
+                 padding:5px 12px;font-weight:700;font-size:.75rem;cursor:pointer">複製</button>
+      </div>
+      <pre id="${id}"
+        style="margin:0;padding:12px 14px;font-family:monospace;font-size:.7rem;
+               line-height:1.6;color:#a8c8f0;overflow-x:auto;white-space:pre-wrap;
+               word-break:break-all;max-height:180px;overflow-y:auto;background:#060a12">${escaped}</pre>
+    </div>`;
+  }).join('');
+
+  // Inject into a full-screen in-page overlay (no popup needed)
+  let overlay = document.getElementById('deploy-overlay');
+  if (!overlay) {
+    overlay = document.createElement('div');
+    overlay.id = 'deploy-overlay';
+    overlay.style.cssText = `
+      position:fixed;inset:0;z-index:200;background:#0a0e1a;overflow-y:auto;
+      padding:16px 12px 48px;`;
+    document.body.appendChild(overlay);
+  }
+
+  overlay.innerHTML = `
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
+      <div>
+        <div style="font-size:1.1rem;font-weight:900;color:#00d4ff">📦 部署包</div>
+        <div style="font-size:.72rem;color:#64748b;font-family:monospace;margin-top:2px">
+          點「複製」→ 電腦新增對應檔案貼上
+        </div>
+      </div>
+      <button onclick="document.getElementById('deploy-overlay').style.display='none'"
+        style="background:#1e2d45;color:#e2e8f0;border:none;border-radius:8px;
+               padding:8px 16px;font-size:.85rem;cursor:pointer">✕ 關閉</button>
+    </div>
+    ${sections}
+    <div style="background:#111827;border:1px solid #7c3aed44;border-radius:10px;
+                padding:14px;font-size:.75rem;line-height:2;font-family:monospace;color:#64748b">
+      <span style="color:#e2e8f0;font-weight:bold">📋 電腦操作</span><br>
+      ① 建立資料夾，依檔名建立各檔案<br>
+      ② 貼上對應內容並存檔<br>
+      ③ git init → git add . → git commit -m "init"<br>
+      ④ push → GitHub Pages 開啟
+    </div>
+  `;
+  overlay.style.display = 'block';
+
+  // inject copy function into page scope
+  window.dpCopy = function(id, btn) {
+    const el = document.getElementById(id);
+    navigator.clipboard.writeText(el.innerText).then(() => {
+      btn.textContent = '✓ 已複製'; btn.style.background = '#10b981';
+      setTimeout(() => { btn.textContent = '複製'; btn.style.background = '#00d4ff'; }, 2000);
+    }).catch(() => {
+      // fallback: select text
+      const range = document.createRange();
+      range.selectNode(el);
+      window.getSelection().removeAllRanges();
+      window.getSelection().addRange(range);
+      showToast('請手動長按→全選→複製');
+    });
+  };
+
+  showToast('✓ 部署包已開啟');
+}
+
+// ─── Toast ────────────────────────────────────────────────
+function showToast(msg, color) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.style.background = color || 'var(--accent3)';
+  t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 3000);
+}
+
+function scrollTop() {
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+</script>
+</body>
+</html>
