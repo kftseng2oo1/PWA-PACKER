@@ -1,4 +1,4 @@
-# My PWA App
+# PWA-PACKER
 
 > 一個 Progressive Web App
 
@@ -18,7 +18,7 @@
 ```bash
 git init
 git add .
-git commit -m "init: My PWA App PWA"
+git commit -m "init: PWA-PACKER PWA"
 git branch -M main
 git remote add origin https://github.com/<username>/<repo>.git
 git push -u origin main
