@@ -553,6 +553,18 @@
   /* hint */
   .hint { font-size: 0.73rem; color: var(--text-dim); margin-top: 4px; font-family: var(--mono); }
 </style>
+
+<!-- PWA Meta — auto-injected by PWA 打包神器 -->
+<meta name="application-name" content="My PWA App">
+<meta name="description" content="">
+<meta name="theme-color" content="#1a73e8">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="MyApp">
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="icon.svg">
+<script>if('serviceWorker'in navigator){window.addEventListener('load',function(){navigator.serviceWorker.register('sw.js').then(function(r){console.log('[SW] registered:',r.scope)}).catch(function(e){console.warn('[SW] failed:',e)});});}</script>
 </head>
 <body>
 
@@ -723,9 +735,73 @@
     <div class="card" style="margin-top:28px">
       <div class="card-title">✅ 04 &nbsp;打包完成 — 點擊預覽 / 下載</div>
       <div class="output-grid" id="output-grid"></div>
+
+      <!-- Validation report -->
+      <div id="validate-report" style="margin-bottom:16px;display:none">
+        <div style="font-size:0.78rem;font-family:var(--mono);color:var(--text-dim);
+                    margin-bottom:8px;text-transform:uppercase;letter-spacing:1px">
+          🔍 結構驗證報告
+        </div>
+        <div id="validate-items" style="display:flex;flex-direction:column;gap:6px"></div>
+      </div>
+
       <div class="btn-row">
         <button class="btn btn-primary" onclick="downloadAll()" id="btn-dl-all">⬇ 全部下載 / 開啟部署包</button>
+        <button class="btn" style="background:#7c3aed;color:#fff" onclick="openSandbox()">🪟 沙箱預覽對比</button>
         <button class="btn btn-secondary" onclick="scrollTop()">↑ 重新設定</button>
+      </div>
+    </div>
+
+
+    <!-- Sandbox overlay — Swipe 左右滑動式 -->
+    <div id="sandbox-overlay" style="display:none;position:fixed;inset:0;z-index:200;
+         background:#0a0e1a;flex-direction:column;">
+
+      <!-- Header -->
+      <div style="display:flex;align-items:center;justify-content:space-between;
+                  padding:10px 14px;border-bottom:1px solid #1e2d45;flex-shrink:0;gap:8px">
+        <div style="font-size:0.8rem;font-family:var(--mono);color:var(--accent);white-space:nowrap">
+          🪟 沙箱對比
+        </div>
+        <!-- Dot indicator -->
+        <div style="display:flex;gap:6px;align-items:center;flex:1;justify-content:center">
+          <span id="dot-orig"
+            style="width:8px;height:8px;border-radius:50%;background:var(--accent);
+                   transition:all 0.25s;display:inline-block"></span>
+          <span id="dot-packed"
+            style="width:8px;height:8px;border-radius:50%;background:var(--border);
+                   transition:all 0.25s;display:inline-block"></span>
+        </div>
+        <button onclick="closeSandbox()"
+          style="background:#1e2d45;color:#e2e8f0;border:none;border-radius:6px;
+                 padding:6px 12px;cursor:pointer;font-size:0.8rem;flex-shrink:0">✕</button>
+      </div>
+
+      <!-- Label bar -->
+      <div id="sandbox-label"
+        style="padding:5px 14px;font-size:0.7rem;font-family:var(--mono);
+               color:var(--accent);background:#111827;border-bottom:1px solid #1e2d45;
+               flex-shrink:0;display:flex;align-items:center;gap:6px">
+        <span>◀ 滑動切換 ▶</span>
+        <span id="sandbox-label-text">原始 HTML</span>
+      </div>
+
+      <!-- Swipe container -->
+      <div id="swipe-track"
+        style="flex:1;display:flex;width:200%;transition:transform 0.3s cubic-bezier(.4,0,.2,1);
+               will-change:transform;touch-action:pan-y;position:relative">
+        <!-- Pane 0: 原始 -->
+        <div style="width:50%;flex-shrink:0;position:relative;overflow:hidden">
+          <iframe id="iframe-orig" sandbox="allow-scripts allow-same-origin"
+            style="position:absolute;inset:0;width:100%;height:100%;border:none;background:#fff"></iframe>
+        </div>
+        <!-- Pane 1: 打包後 -->
+        <div style="width:50%;flex-shrink:0;position:relative;overflow:hidden">
+          <iframe id="iframe-packed" sandbox="allow-scripts allow-same-origin"
+            style="position:absolute;inset:0;width:100%;height:100%;border:none;background:#fff"></iframe>
+        </div>
+        <!-- Transparent swipe capture overlay — covers iframes during gesture detection -->
+        <div id="swipe-cap" style="position:absolute;inset:0;z-index:10;touch-action:pan-y"></div>
       </div>
     </div>
 
@@ -1119,70 +1195,66 @@ self.addEventListener('fetch', event => {
 `;
 }
 
-// ─── Inject PWA meta into HTML (DOMParser — safe dedup) ──
+// ─── Inject PWA meta into HTML (string-based, safe for complex HTML) ──
 function generateIndexHTML(raw, cfg, opts) {
   if (!opts.injectMeta) return raw;
 
-  const parser = new DOMParser();
-  const doc = parser.parseFromString(raw, 'text/html');
+  let html = raw;
 
-  // Remove duplicates first
-  [
-    'link[rel="manifest"]',
-    'link[rel="apple-touch-icon"]',
-    'meta[name="theme-color"]',
-    'meta[name="application-name"]',
-    'meta[name="mobile-web-app-capable"]',
-    'meta[name="apple-mobile-web-app-capable"]',
-    'meta[name="apple-mobile-web-app-status-bar-style"]',
-    'meta[name="apple-mobile-web-app-title"]',
-    'meta[name="description"]',
-  ].forEach(sel => doc.querySelectorAll(sel).forEach(el => el.remove()));
+  // ── Step 1: Remove existing duplicates via regex (safe, no DOM parse) ──
+  const removeTags = [
+    /<link[^>]+rel=["']manifest["'][^>]*>/gi,
+    /<link[^>]+rel=["']apple-touch-icon["'][^>]*>/gi,
+    /<meta[^>]+name=["']theme-color["'][^>]*>/gi,
+    /<meta[^>]+name=["']application-name["'][^>]*>/gi,
+    /<meta[^>]+name=["']mobile-web-app-capable["'][^>]*>/gi,
+    /<meta[^>]+name=["']apple-mobile-web-app-capable["'][^>]*>/gi,
+    /<meta[^>]+name=["']apple-mobile-web-app-status-bar-style["'][^>]*>/gi,
+    /<meta[^>]+name=["']apple-mobile-web-app-title["'][^>]*>/gi,
+  ];
+  removeTags.forEach(re => { html = html.replace(re, ''); });
 
-  // Remove existing SW register script (detect by content)
-  doc.querySelectorAll('script').forEach(s => {
-    if (s.textContent.includes('serviceWorker') && s.textContent.includes('sw.js'))
-      s.remove();
+  // Remove existing SW register script blocks
+  // Strategy: parse script tags individually; only remove SW registration blocks
+  // (must have serviceWorker + sw.js reference + be short < 2000 chars)
+  html = html.replace(/(<script[^>]*>)([\s\S]*?)(<\/script>)/gi, function(match, open, body, close) {
+    const hasSW  = body.indexOf('serviceWorker') !== -1;
+    const hasSWjs = body.indexOf("'sw.js'") !== -1 || body.indexOf('"sw.js"') !== -1;
+    const isShort = body.length < 2000; // registration scripts are tiny
+    if (hasSW && hasSWjs && isShort) return '';
+    return match;
   });
 
-  function addMeta(attrs) {
-    const el = doc.createElement('meta');
-    Object.entries(attrs).forEach(([k,v]) => el.setAttribute(k, v));
-    doc.head.appendChild(el);
+  // ── Step 2: Build injection block ──
+  // IMPORTANT: split '</scr'+'ipt>' to prevent HTML parser from truncating pwa-packer's own script
+  const SC = '<scr'+'ipt>';
+  const SCE = '</'+'script>';
+  const swCode = "if('serviceWorker'in navigator){window.addEventListener('load',function(){navigator.serviceWorker.register('sw.js').then(function(r){console.log('[SW] registered:',r.scope)}).catch(function(e){console.warn('[SW] failed:',e)});});}";
+  const swBlock = SC + swCode + SCE;
+
+  const inject = `
+<!-- PWA Meta — auto-injected by PWA 打包神器 -->
+
+<meta name="description" content="${esc(cfg.desc)}">
+
+
+
+
+
+
+
+${swBlock}`;
+
+  // ── Step 3: Insert before </head> ──
+  if (html.includes('</head>')) {
+    html = html.replace('</head>', inject + '\n</head>');
+  } else if (/<body[\s>]/i.test(html)) {
+    html = html.replace(/<body[\s>]/i, inject + '\n$&');
+  } else {
+    html = inject + '\n' + html;
   }
-  function addLink(attrs) {
-    const el = doc.createElement('link');
-    Object.entries(attrs).forEach(([k,v]) => el.setAttribute(k, v));
-    doc.head.appendChild(el);
-  }
 
-  addMeta({ name: 'application-name',                  content: cfg.name });
-  addMeta({ name: 'description',                        content: cfg.desc });
-  addMeta({ name: 'theme-color',                        content: cfg.theme });
-  addMeta({ name: 'mobile-web-app-capable',             content: 'yes' });
-  addMeta({ name: 'apple-mobile-web-app-capable',       content: 'yes' });
-  addMeta({ name: 'apple-mobile-web-app-status-bar-style', content: 'default' });
-  addMeta({ name: 'apple-mobile-web-app-title',         content: cfg.short });
-  addLink({ rel: 'manifest',         href: 'manifest.json' });
-  addLink({ rel: 'apple-touch-icon', href: 'icon.svg' });
-
-  // Inject SW registration as last script in head
-  const swScript = doc.createElement('script');
-  swScript.textContent = `
-  if ('serviceWorker' in navigator) {
-    window.addEventListener('load', () => {
-      navigator.serviceWorker.register('sw.js')
-        .then(r => console.log('[SW] registered:', r.scope))
-        .catch(e => console.warn('[SW] registration failed:', e));
-    });
-  }`;
-  doc.head.appendChild(swScript);
-
-  // Inject comment marker
-  const comment = doc.createComment(' PWA Meta — auto-injected by PWA 打包神器 ');
-  doc.head.insertBefore(comment, doc.head.firstChild);
-
-  return '<!DOCTYPE html>\n' + doc.documentElement.outerHTML;
+  return html;
 }
 
 function esc(s) { return (s||'').replace(/"/g, '&quot;'); }
@@ -1282,7 +1354,203 @@ git push -u origin main
 `;
 }
 
-// ─── Render output ────────────────────────────────────────
+// ─── Validation ───────────────────────────────────────────
+function validatePack(original, packed) {
+  const checks = [];
+
+  function countTag(html, tag) {
+    return (html.match(new RegExp('<' + tag + '[\\s>]', 'gi')) || []).length;
+  }
+
+  // 1. Script tag count
+  const origScripts  = countTag(original, 'script');
+  const packedScripts = countTag(packed, 'script');
+  const expectedExtra = 1; // SW registration script
+  const scriptDiff = packedScripts - origScripts;
+  checks.push({
+    ok: scriptDiff >= 0 && scriptDiff <= expectedExtra + 1,
+    label: 'script 標籤數量',
+    detail: '原始 ' + origScripts + ' 個 → 打包後 ' + packedScripts + ' 個'
+              + (scriptDiff < 0 ? ' ⚠ 少了 ' + Math.abs(scriptDiff) + ' 個！' : '')
+  });
+
+  // 2. Body tag present
+  checks.push({
+    ok: /<\/body>/i.test(packed),
+    label: '</body> 標籤完整',
+    detail: /<\/body>/i.test(packed) ? '存在' : '❌ 遺失，HTML 結構可能被截斷'
+  });
+
+  // 3. Size sanity
+  const ratio = packed.length / original.length;
+  const hadSW = original.indexOf('serviceWorker') !== -1;
+  // If original had SW code, packed may be slightly smaller (SW block removed + new one added)
+  // Allow down to 85% if original had SW; otherwise must be >= 100%
+  const minRatio = hadSW ? 0.85 : 1.0;
+  const sizeOk = ratio >= minRatio && ratio < 2.0;
+  checks.push({
+    ok: sizeOk,
+    label: '檔案大小合理',
+    detail: '原始 ' + formatSize(original.length) + ' → 打包 ' + formatSize(packed.length)
+              + ' (' + (ratio * 100).toFixed(0) + '%)'
+              + (!sizeOk && ratio < minRatio ? ' ❌ 縮水過多，內容可能遺失' : '')
+              + (!sizeOk && ratio >= 2.0 ? ' ⚠ 異常膨脹' : '')
+              + (sizeOk && hadSW ? '（含去重 SW 程式碼）' : '')
+  });
+
+  // 4. manifest link injected
+  checks.push({
+    ok: /rel=["']manifest["']/.test(packed),
+    label: 'manifest.json 連結注入',
+    detail: /rel=["']manifest["']/.test(packed) ? '✓ 已注入' : '❌ 未找到'
+  });
+
+  // 5. SW register code present
+  checks.push({
+    ok: packed.indexOf('serviceWorker') !== -1,
+    label: 'Service Worker 註冊碼',
+    detail: packed.indexOf('serviceWorker') !== -1 ? '✓ 已注入' : '❌ 未找到'
+  });
+
+  // 6. Pre-existing SW check (warn if original already had SW)
+  if (original.indexOf('serviceWorker') !== -1) {
+    checks.push({
+      ok: null, // warning, not error
+      label: '原始檔已有 SW 程式碼',
+      detail: '⚠ 原始 HTML 本身含有 serviceWorker，已自動去重，請確認功能正常'
+    });
+  }
+
+  // 7. Content integrity: count non-empty script blocks in original vs packed
+  function countNonEmptyScripts(html) {
+    let count = 0;
+    html.replace(/(<script[^>]*>)([\s\S]*?)(<\/script>)/gi, function(m, o, body) {
+      if (body.trim().length > 10) count++;
+      return m;
+    });
+    return count;
+  }
+  const origNE  = countNonEmptyScripts(original);
+  const packNE  = countNonEmptyScripts(packed);
+  const lost    = origNE - packNE;
+  checks.push({
+    ok: lost <= 0, // packed should have same or more non-empty scripts
+    label: '有效 script 區塊完整性',
+    detail: lost > 0
+      ? '❌ 原始有 ' + origNE + ' 個有效 script，打包後剩 ' + packNE + ' 個，遺失 ' + lost + ' 個！'
+      : '✓ 原始 ' + origNE + ' 個 → 打包後 ' + packNE + ' 個（含新增 SW 註冊）'
+  });
+
+  return checks;
+}
+
+function renderValidation(checks) {
+  const report = document.getElementById('validate-report');
+  const items  = document.getElementById('validate-items');
+  items.innerHTML = '';
+  checks.forEach(c => {
+    const color = c.ok === null ? '#f59e0b' : c.ok ? '#10b981' : '#ef4444';
+    const icon  = c.ok === null ? '⚠' : c.ok ? '✓' : '✕';
+    const div = document.createElement('div');
+    div.style.cssText = 'display:flex;gap:10px;align-items:flex-start;padding:8px 12px;' +
+      'background:#0d1420;border-radius:6px;border-left:3px solid ' + color;
+    div.innerHTML =
+      '<span style="color:' + color + ';font-weight:700;font-family:var(--mono);flex-shrink:0">' + icon + '</span>' +
+      '<div><div style="font-size:0.8rem;color:#e2e8f0;font-family:var(--mono)">' + c.label + '</div>' +
+      '<div style="font-size:0.72rem;color:#64748b;margin-top:2px">' + c.detail + '</div></div>';
+    items.appendChild(div);
+  });
+  report.style.display = 'block';
+}
+
+// ─── Sandbox preview — Swipe 式 ──────────────────────────
+let sandboxPage = 0; // 0=orig, 1=packed
+let swipeStartX = 0, swipeStartY = 0, swiping = false;
+
+const LABELS = ['原始 HTML（未注入 PWA）', '打包後 index.html（含 PWA meta + SW）'];
+const LABEL_COLORS = ['var(--accent)', 'var(--accent3)'];
+
+function sandboxGoTo(page) {
+  sandboxPage = page;
+  const track = document.getElementById('swipe-track');
+  // track is 200% wide; each pane is 50% of track = 100vw
+  track.style.transform = page === 0 ? 'translateX(0)' : 'translateX(-50%)';
+
+  document.getElementById('dot-orig').style.background   = page === 0 ? 'var(--accent)' : 'var(--border)';
+  document.getElementById('dot-packed').style.background = page === 1 ? 'var(--accent3)' : 'var(--border)';
+  document.getElementById('sandbox-label-text').textContent = LABELS[page];
+  document.getElementById('sandbox-label').style.color = LABEL_COLORS[page];
+}
+
+function initSwipe() {
+  const track = document.getElementById('swipe-track');
+  const cap   = document.getElementById('swipe-cap');
+
+  // Clone to remove any previous listeners
+  const newCap = cap.cloneNode(true);
+  cap.parentNode.replaceChild(newCap, cap);
+
+  let x0 = 0, y0 = 0, intent = null; // intent: null | 'h' | 'v'
+
+  newCap.addEventListener('touchstart', e => {
+    x0 = e.touches[0].clientX;
+    y0 = e.touches[0].clientY;
+    intent = null;
+    track.style.transition = 'none';
+  }, { passive: true });
+
+  newCap.addEventListener('touchmove', e => {
+    const dx = e.touches[0].clientX - x0;
+    const dy = e.touches[0].clientY - y0;
+
+    if (!intent) {
+      if (Math.abs(dx) < 5 && Math.abs(dy) < 5) return;
+      intent = Math.abs(dx) >= Math.abs(dy) ? 'h' : 'v';
+    }
+
+    if (intent === 'h') {
+      const base    = sandboxPage === 0 ? 0 : -50;
+      const pct     = base + (dx / window.innerWidth) * 50;
+      const clamped = Math.max(-52, Math.min(2, pct));
+      track.style.transform = 'translateX(' + clamped + '%)';
+    }
+    // vertical: let iframe handle it (cap has touch-action:none but we don't prevent default here)
+  }, { passive: true });
+
+  newCap.addEventListener('touchend', e => {
+    track.style.transition = 'transform 0.3s cubic-bezier(.4,0,.2,1)';
+    if (intent !== 'h') { sandboxGoTo(sandboxPage); return; }
+    const dx = e.changedTouches[0].clientX - x0;
+    const threshold = window.innerWidth * 0.2;
+    if      (dx < -threshold && sandboxPage === 0) sandboxGoTo(1);
+    else if (dx >  threshold && sandboxPage === 1) sandboxGoTo(0);
+    else sandboxGoTo(sandboxPage);
+    intent = null;
+  }, { passive: true });
+}
+
+function openSandbox() {
+  const orig   = htmlContent;
+  const packed = generatedFiles['index.html'] || '';
+  if (!orig || !packed) { showToast('⚠ 請先完成打包', '#f59e0b'); return; }
+
+  const overlay = document.getElementById('sandbox-overlay');
+  overlay.style.display = 'flex';
+
+  document.getElementById('iframe-orig').srcdoc   = orig;
+  document.getElementById('iframe-packed').srcdoc = packed;
+
+  sandboxGoTo(0);
+  initSwipe();
+}
+
+function closeSandbox() {
+  document.getElementById('sandbox-overlay').style.display = 'none';
+  document.getElementById('iframe-orig').srcdoc   = '';
+  document.getElementById('iframe-packed').srcdoc = '';
+}
+
+
 const fileIcons = {
   'index.html':        '🌐',
   'sw.js':             '⚙',
@@ -1321,6 +1589,13 @@ function renderOutput() {
     `;
     grid.appendChild(chip);
   }
+
+  // Run structural validation
+  if (htmlContent && generatedFiles['index.html']) {
+    const checks = validatePack(htmlContent, generatedFiles['index.html']);
+    renderValidation(checks);
+  }
+
   document.getElementById('output-section').style.display = 'block';
   document.getElementById('output-section').scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
