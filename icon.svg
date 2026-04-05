@@ -1,142 +1,15 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
-  <defs>
-    <!-- Background gradient: deep navy to dark indigo -->
-    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="#0d1b3e"/>
-      <stop offset="100%" stop-color="#1a0a2e"/>
-    </linearGradient>
-
-    <!-- Accent glow: cyan -->
-    <linearGradient id="glowCyan" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="#00d4ff"/>
-      <stop offset="100%" stop-color="#0090cc"/>
-    </linearGradient>
-
-    <!-- Purple accent -->
-    <linearGradient id="glowPurple" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="#a855f7"/>
-      <stop offset="100%" stop-color="#7c3aed"/>
-    </linearGradient>
-
-    <!-- Box face gradient -->
-    <linearGradient id="boxTop" x1="0%" y1="0%" x2="0%" y2="100%">
-      <stop offset="0%" stop-color="#1e3a5f"/>
-      <stop offset="100%" stop-color="#0f2040"/>
-    </linearGradient>
-
-    <linearGradient id="boxSide" x1="0%" y1="0%" x2="100%" y2="0%">
-      <stop offset="0%" stop-color="#0a1628"/>
-      <stop offset="100%" stop-color="#0d1f3c"/>
-    </linearGradient>
-
-    <!-- Cyan glow filter -->
-    <filter id="cyanGlow" x="-30%" y="-30%" width="160%" height="160%">
-      <feGaussianBlur stdDeviation="6" result="blur"/>
-      <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
-    </filter>
-
-    <filter id="softGlow" x="-20%" y="-20%" width="140%" height="140%">
-      <feGaussianBlur stdDeviation="4" result="blur"/>
-      <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
-    </filter>
-
-    <!-- Clip to rounded square -->
-    <clipPath id="roundedClip">
-      <rect width="512" height="512" rx="108" ry="108"/>
-    </clipPath>
-  </defs>
-
-  <!-- ── Background ── -->
-  <rect width="512" height="512" rx="108" fill="url(#bg)"/>
-
-  <!-- Subtle grid lines -->
-  <g clip-path="url(#roundedClip)" opacity="0.07" stroke="#00d4ff" stroke-width="1">
-    <line x1="0" y1="128" x2="512" y2="128"/>
-    <line x1="0" y1="256" x2="512" y2="256"/>
-    <line x1="0" y1="384" x2="512" y2="384"/>
-    <line x1="128" y1="0" x2="128" y2="512"/>
-    <line x1="256" y1="0" x2="256" y2="512"/>
-    <line x1="384" y1="0" x2="384" y2="512"/>
-  </g>
-
-  <!-- ── Isometric Package Box ── -->
-  <!-- Box body — front face -->
-  <polygon points="256,160 390,235 390,355 256,280" fill="url(#boxTop)" stroke="#1e4a7a" stroke-width="1.5"/>
-  <!-- Box body — right face -->
-  <polygon points="256,280 390,355 390,375 256,300" fill="#060e1f" opacity="0.6"/>
-  <!-- Box body — left face -->
-  <polygon points="256,160 122,235 122,355 256,280" fill="url(#boxSide)" stroke="#0d2a4a" stroke-width="1.5"/>
-  <!-- Box body — left bottom -->
-  <polygon points="256,300 122,355 122,375 256,320" fill="#040c1a" opacity="0.5"/>
-
-  <!-- Top face of box -->
-  <polygon points="256,120 390,195 256,270 122,195" fill="#1a3560" stroke="#1e4a7a" stroke-width="1.5"/>
-
-  <!-- Top face highlight -->
-  <polygon points="256,130 378,200 256,258 134,200" fill="#1e4070" opacity="0.5"/>
-
-  <!-- ── Cyan edge glows ── -->
-  <!-- Top edges -->
-  <line x1="256" y1="120" x2="390" y2="195" stroke="#00d4ff" stroke-width="2" opacity="0.8" filter="url(#softGlow)"/>
-  <line x1="256" y1="120" x2="122" y2="195" stroke="#00d4ff" stroke-width="2" opacity="0.8" filter="url(#softGlow)"/>
-  <!-- Vertical edges -->
-  <line x1="390" y1="195" x2="390" y2="375" stroke="#00d4ff" stroke-width="1.5" opacity="0.5"/>
-  <line x1="122" y1="195" x2="122" y2="375" stroke="#0090cc" stroke-width="1.5" opacity="0.4"/>
-  <!-- Bottom edges -->
-  <line x1="122" y1="375" x2="256" y2="320" stroke="#0090cc" stroke-width="1.5" opacity="0.4"/>
-  <line x1="390" y1="375" x2="256" y2="320" stroke="#00d4ff" stroke-width="1.5" opacity="0.5"/>
-
-  <!-- Center ridge top face -->
-  <line x1="256" y1="120" x2="256" y2="270" stroke="#00d4ff" stroke-width="1.5" opacity="0.3"/>
-
-  <!-- ── Circuit traces on front face ── -->
-  <g opacity="0.55" stroke="#00d4ff" stroke-width="2" fill="none" filter="url(#softGlow)">
-    <!-- Horizontal trace -->
-    <polyline points="290,220 340,220 340,240 360,240"/>
-    <!-- Vertical trace -->
-    <polyline points="290,250 290,275 310,275"/>
-    <!-- Small branch -->
-    <polyline points="315,230 315,250 335,250"/>
-    <!-- Dot nodes -->
-    <circle cx="290" cy="220" r="3.5" fill="#00d4ff" stroke="none"/>
-    <circle cx="340" cy="240" r="3" fill="#00d4ff" stroke="none"/>
-    <circle cx="290" cy="275" r="3" fill="#00d4ff" stroke="none"/>
-    <circle cx="315" cy="250" r="2.5" fill="#00d4ff" stroke="none"/>
-  </g>
-
-  <!-- ── PWA bolt / arrow symbol on top face ── -->
-  <!-- Lightning bolt shape, centered on top -->
-  <g filter="url(#cyanGlow)">
-    <polygon
-      points="262,148 244,192 258,192 250,228 272,180 257,180 268,148"
-      fill="url(#glowCyan)"
-      opacity="0.95"/>
-  </g>
-
-  <!-- ── Corner accent dots ── -->
-  <circle cx="88" cy="88" r="6" fill="#00d4ff" opacity="0.4"/>
-  <circle cx="424" cy="88" r="6" fill="#00d4ff" opacity="0.4"/>
-  <circle cx="88" cy="424" r="6" fill="#7c3aed" opacity="0.4"/>
-  <circle cx="424" cy="424" r="6" fill="#7c3aed" opacity="0.4"/>
-
-  <!-- Corner brackets -->
-  <g stroke="#00d4ff" stroke-width="2.5" fill="none" opacity="0.5" stroke-linecap="round">
-    <polyline points="68,100 68,68 100,68"/>
-    <polyline points="412,68 444,68 444,100"/>
-    <polyline points="68,412 68,444 100,444"/>
-    <polyline points="444,412 444,444 412,444"/>
-  </g>
-
-  <!-- ── Purple accent arc (bottom) ── -->
-  <path d="M 160 400 Q 256 450 352 400" stroke="url(#glowPurple)" stroke-width="3"
-        fill="none" opacity="0.7" filter="url(#softGlow)"/>
-
-  <!-- ── "PWA" micro label ── -->
-  <text x="256" y="460" text-anchor="middle"
-        font-family="'Courier New', monospace" font-size="28" font-weight="700"
-        letter-spacing="8" fill="#00d4ff" opacity="0.75">PWA</text>
-
-  <!-- Outer rim glow -->
-  <rect width="512" height="512" rx="108" fill="none"
-        stroke="#00d4ff" stroke-width="3" opacity="0.15"/>
-</svg>
+<svg id="svgMain" width="512" height="512" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+        <defs>
+          <linearGradient id="g1" x1="0%" y1="0%" x2="100%" y2="100%">
+            <stop offset="0%" id="sStart" stop-color="#D4D486"></stop>
+            <stop offset="100%" id="sEnd" stop-color="#808000"></stop>
+          </linearGradient>
+          <filter id="fShadow" x="-30%" y="-30%" width="160%" height="160%">
+            <feDropShadow dx="0" dy="0.5" stdDeviation="0.8" flood-color="rgba(0,0,0,0.7)"></feDropShadow>
+          </filter>
+        </defs>
+        <rect id="elRect" x="0.5" y="0.5" width="23" height="23" rx="8.96" ry="8.96" fill="#2325a9" stroke="#dece1b" stroke-width="2"></rect>
+        <circle id="elCirc" cx="12" cy="12" r="11.5" fill="#8d8eff" style="display:none"></circle>
+        <path id="elGeo" d="M 20.5,12 A 8.5,8.5 0 1 0 3.5,12 A 8.5,8.5 0 1 0 20.5,12 Z M 17.95,12 A 5.949999999999999,5.949999999999999 0 1 1 6.050000000000001,12 A 5.949999999999999,5.949999999999999 0 1 1 17.95,12 Z" fill="url(#g1)"></path>
+        <g id="elSlot"><text x="12" y="12" dy="0.38em" text-anchor="middle" font-weight="900" font-size="4.80" fill="#FFFFFF">PWA</text></g>
+      </svg>
