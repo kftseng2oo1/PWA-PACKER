@@ -553,18 +553,6 @@
   /* hint */
   .hint { font-size: 0.73rem; color: var(--text-dim); margin-top: 4px; font-family: var(--mono); }
 </style>
-
-<!-- PWA Meta — auto-injected by PWA 打包神器 -->
-<meta name="application-name" content="PWA打包神器">
-<meta name="description" content="">
-<meta name="theme-color" content="#1a73e8">
-<meta name="mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-status-bar-style" content="default">
-<meta name="apple-mobile-web-app-title" content="PWA打包神器">
-<link rel="manifest" href="manifest.json">
-<link rel="apple-touch-icon" href="icon.svg">
-<script>if('serviceWorker'in navigator){window.addEventListener('load',function(){navigator.serviceWorker.register('sw.js').then(function(r){console.log('[SW] registered:',r.scope)}).catch(function(e){console.warn('[SW] failed:',e)});});}</script>
 </head>
 <body>
 
@@ -748,8 +736,74 @@
       <div class="btn-row">
         <button class="btn btn-primary" onclick="downloadAll()" id="btn-dl-all">⬇ 全部下載 / 開啟部署包</button>
         <button class="btn" style="background:#7c3aed;color:#fff" onclick="openSandbox()">🪟 沙箱預覽對比</button>
+        <button class="btn" style="background:#24292e;color:#fff;border:1px solid #444"
+          onclick="openGitHubPanel()">🐙 上傳到 GitHub</button>
         <button class="btn btn-secondary" onclick="scrollTop()">↑ 重新設定</button>
       </div>
+    </div>
+
+    <!-- GitHub Upload Panel -->
+    <div id="gh-panel" style="display:none">
+    <div class="card" style="margin-top:16px;border-color:rgba(36,41,46,0.8);
+         background:linear-gradient(135deg,#0d1117,#161b22)">
+      <div class="card-title" style="color:#58a6ff">🐙 05 &nbsp;直接上傳到 GitHub</div>
+
+      <div class="form-grid">
+        <div class="field">
+          <label>GitHub Username</label>
+          <input type="text" id="gh-user" placeholder="kftseng2oo1" autocapitalize="none">
+        </div>
+        <div class="field">
+          <label>Repository 名稱</label>
+          <input type="text" id="gh-repo" placeholder="my-pwa-app" autocapitalize="none">
+        </div>
+        <div class="field full">
+          <label>Personal Access Token（需有 repo 權限）</label>
+          <input type="password" id="gh-token" placeholder="ghp_xxxxxxxxxxxx" autocapitalize="none"
+            autocomplete="off">
+          <p class="hint">⚠ Token 僅存在記憶體，不會儲存。
+            <a href="https://github.com/settings/tokens/new?scopes=repo" target="_blank"
+               style="color:#58a6ff">點此申請 Token →</a>
+          </p>
+        </div>
+        <div class="field">
+          <label>Branch</label>
+          <input type="text" id="gh-branch" value="main" placeholder="main" autocapitalize="none">
+        </div>
+        <div class="field">
+          <label>Commit 訊息</label>
+          <input type="text" id="gh-msg" value="deploy: PWA packer upload" placeholder="commit message">
+        </div>
+      </div>
+
+      <!-- Progress -->
+      <div id="gh-progress" style="display:none;margin-top:16px">
+        <div style="font-size:0.75rem;font-family:var(--mono);color:#58a6ff;margin-bottom:8px"
+             id="gh-progress-label">準備上傳…</div>
+        <div style="background:#0d1117;border-radius:6px;height:6px;overflow:hidden">
+          <div id="gh-progress-bar"
+            style="height:100%;background:linear-gradient(90deg,#58a6ff,#3fb950);
+                   width:0%;transition:width 0.3s;border-radius:6px"></div>
+        </div>
+        <div id="gh-file-list"
+          style="margin-top:10px;font-size:0.7rem;font-family:var(--mono);
+                 color:#8b949e;display:flex;flex-direction:column;gap:3px"></div>
+      </div>
+
+      <button id="gh-upload-btn"
+        style="width:100%;margin-top:16px;padding:16px;
+               background:linear-gradient(135deg,#238636,#2ea043);
+               border:none;border-radius:10px;color:#fff;font-size:1rem;
+               font-weight:700;cursor:pointer;display:flex;align-items:center;
+               justify-content:center;gap:8px;font-family:var(--sans);
+               box-shadow:0 4px 16px rgba(46,160,67,0.3)"
+        onclick="uploadToGitHub()">
+        🚀 一鍵上傳所有檔案
+      </button>
+
+      <div id="gh-result" style="display:none;margin-top:12px;padding:14px;
+           border-radius:8px;font-size:0.82rem;font-family:var(--mono)"></div>
+    </div>
     </div>
 
 
@@ -1234,15 +1288,15 @@ function generateIndexHTML(raw, cfg, opts) {
 
   const inject = `
 <!-- PWA Meta — auto-injected by PWA 打包神器 -->
-
+<meta name="application-name" content="${esc(cfg.name)}">
 <meta name="description" content="${esc(cfg.desc)}">
-
-
-
-
-
-
-
+<meta name="theme-color" content="${cfg.theme}">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="${esc(cfg.short)}">
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="icon.svg">
 ${swBlock}`;
 
   // ── Step 3: Insert before </head> ──
@@ -1550,6 +1604,122 @@ function closeSandbox() {
   document.getElementById('iframe-packed').srcdoc = '';
 }
 
+// ─── GitHub Upload ────────────────────────────────────────
+function openGitHubPanel() {
+  const panel = document.getElementById('gh-panel');
+  panel.style.display = panel.style.display === 'none' ? 'block' : 'none';
+  if (panel.style.display === 'block') {
+    panel.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
+}
+
+async function uploadToGitHub() {
+  const user   = document.getElementById('gh-user').value.trim();
+  const repo   = document.getElementById('gh-repo').value.trim();
+  const token  = document.getElementById('gh-token').value.trim();
+  const branch = document.getElementById('gh-branch').value.trim() || 'main';
+  const msg    = document.getElementById('gh-msg').value.trim() || 'deploy: PWA packer upload';
+
+  if (!user || !repo || !token) {
+    showToast('⚠ 請填寫 Username、Repo 和 Token', '#f59e0b'); return;
+  }
+  if (Object.keys(generatedFiles).length === 0) {
+    showToast('⚠ 請先打包檔案', '#f59e0b'); return;
+  }
+
+  const btn        = document.getElementById('gh-upload-btn');
+  const progress   = document.getElementById('gh-progress');
+  const progressBar= document.getElementById('gh-progress-bar');
+  const progressLbl= document.getElementById('gh-progress-label');
+  const fileListEl = document.getElementById('gh-file-list');
+  const resultEl   = document.getElementById('gh-result');
+
+  btn.disabled = true;
+  btn.innerHTML = '⏳ 上傳中…';
+  progress.style.display = 'block';
+  resultEl.style.display = 'none';
+  fileListEl.innerHTML = '';
+  progressBar.style.width = '0%';
+  progressBar.style.background = 'linear-gradient(90deg,#58a6ff,#3fb950)';
+
+  const base = 'https://api.github.com/repos/' + user + '/' + repo + '/contents/';
+  const headers = {
+    'Authorization': 'token ' + token,
+    'Content-Type': 'application/json',
+    'Accept': 'application/vnd.github.v3+json',
+  };
+
+  const files = Object.entries(generatedFiles);
+  let done = 0, errors = [];
+
+  for (const [name, content] of files) {
+    progressLbl.textContent = '(' + (done+1) + '/' + files.length + ') ' + name;
+
+    const b64 = name.endsWith('.png')
+      ? content
+      : btoa(unescape(encodeURIComponent(content)));
+
+    // Get existing SHA (needed for update)
+    let sha = null;
+    try {
+      const chk = await fetch(base + encodeURIComponent(name) + '?ref=' + branch, { headers });
+      if (chk.ok) { const d = await chk.json(); sha = d.sha; }
+    } catch(e) {}
+
+    const body = { message: msg, content: b64, branch };
+    if (sha) body.sha = sha;
+
+    let ok = false;
+    try {
+      const res = await fetch(base + encodeURIComponent(name), {
+        method: 'PUT', headers, body: JSON.stringify(body)
+      });
+      ok = res.status === 200 || res.status === 201;
+      if (!ok) {
+        const err = await res.json().catch(() => ({}));
+        errors.push(name + ': ' + (err.message || res.status));
+      }
+    } catch(e) {
+      errors.push(name + ': network error');
+    }
+
+    const row = document.createElement('div');
+    row.style.color = ok ? '#3fb950' : '#f85149';
+    row.textContent = (ok ? '✓ ' : '✕ ') + name;
+    fileListEl.appendChild(row);
+
+    done++;
+    progressBar.style.width = Math.round(done / files.length * 100) + '%';
+    await new Promise(r => setTimeout(r, 180));
+  }
+
+  btn.disabled = false;
+  btn.innerHTML = '🚀 一鍵上傳所有檔案';
+
+  const pagesUrl = 'https://' + user + '.github.io/' + repo + '/';
+  resultEl.style.display = 'block';
+
+  if (errors.length === 0) {
+    progressLbl.textContent = '✅ 全部上傳完成！';
+    progressBar.style.background = '#3fb950';
+    resultEl.style.cssText = 'display:block;margin-top:12px;padding:14px;border-radius:8px;' +
+      'background:rgba(46,160,67,0.1);border:1px solid rgba(46,160,67,0.4);' +
+      'font-size:0.82rem;font-family:var(--mono);color:#3fb950';
+    resultEl.innerHTML =
+      '✅ 成功上傳 ' + files.length + ' 個檔案！<br><br>' +
+      '🌐 Pages 網址（1~3 分鐘後生效）：<br>' +
+      '<a href="' + pagesUrl + '" target="_blank" ' +
+      'style="color:#58a6ff;word-break:break-all">' + pagesUrl + '</a><br><br>' +
+      '📋 首次部署：到 repo Settings → Pages → Branch 選 main → Save';
+  } else {
+    progressLbl.textContent = '⚠ 部分失敗（' + errors.length + ' 個）';
+    resultEl.style.cssText = 'display:block;margin-top:12px;padding:14px;border-radius:8px;' +
+      'background:rgba(248,81,73,0.1);border:1px solid rgba(248,81,73,0.4);' +
+      'font-size:0.82rem;font-family:var(--mono);color:#f85149';
+    resultEl.innerHTML = '❌ 失敗：' + errors.join('<br>') +
+      '<br><br>請確認 Token 有 repo 寫入權限，及帳號/repo 名稱是否正確';
+  }
+}
 
 const fileIcons = {
   'index.html':        '🌐',
