@@ -1,6 +1,6 @@
-# 智慧用藥盒子AI
+# 打包上傳github神器
 
-> 智慧用藥盒子AI
+> 打包上傳github神器
 
 ## 📦 包含檔案
 
@@ -18,7 +18,7 @@
 ```bash
 git init
 git add .
-git commit -m "init: 智慧用藥盒子AI PWA"
+git commit -m "init: 打包上傳github神器 PWA"
 git branch -M main
 git remote add origin https://github.com/<username>/<repo>.git
 git push -u origin main
