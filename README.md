@@ -1,6 +1,6 @@
-# PWA打包神器
+# 智慧用藥盒子AI
 
-> 一個 Progressive Web App
+> 智慧用藥盒子AI
 
 ## 📦 包含檔案
 
@@ -18,7 +18,7 @@
 ```bash
 git init
 git add .
-git commit -m "init: PWA打包神器 PWA"
+git commit -m "init: 智慧用藥盒子AI PWA"
 git branch -M main
 git remote add origin https://github.com/<username>/<repo>.git
 git push -u origin main
