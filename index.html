@@ -751,7 +751,7 @@
       <div class="form-grid">
         <div class="field">
           <label>GitHub Username</label>
-          <input type="text" id="gh-user" placeholder="kftseng2oo1" autocapitalize="none">
+          <input type="text" id="gh-user" placeholder="kftseng2oo1" autocapitalize="none" value="kftseng2oo1">
         </div>
         <div class="field">
           <label>Repository 名稱</label>
@@ -761,7 +761,7 @@
           <label>Personal Access Token（需有 repo 權限）</label>
           <input type="password" id="gh-token" placeholder="ghp_xxxxxxxxxxxx" autocapitalize="none"
             autocomplete="off">
-          <p class="hint">⚠ Token 僅存在記憶體，不會儲存。
+          <p class="hint">
             <a href="https://github.com/settings/tokens/new?scopes=repo" target="_blank"
                style="color:#58a6ff">點此申請 Token →</a>
           </p>
@@ -773,6 +773,20 @@
         <div class="field">
           <label>Commit 訊息</label>
           <input type="text" id="gh-msg" value="deploy: PWA packer upload" placeholder="commit message">
+        </div>
+        <!-- Remember toggle -->
+        <div class="field full">
+          <label class="toggle" style="background:rgba(88,166,255,0.06);border-color:rgba(88,166,255,0.2)">
+            <input type="checkbox" id="gh-remember" onchange="ghToggleRemember()">
+            <span class="toggle-box">✓</span>
+            記住 Username、Repo 和 Token（儲存於 localStorage）
+          </label>
+          <div id="gh-saved-hint" style="display:none;font-size:0.72rem;font-family:var(--mono);
+               margin-top:6px;color:#3fb950">
+            ✓ 已儲存　
+            <span onclick="ghClearSaved()"
+              style="color:#f85149;cursor:pointer;text-decoration:underline">清除儲存資料</span>
+          </div>
         </div>
       </div>
 
@@ -1299,9 +1313,10 @@ function generateIndexHTML(raw, cfg, opts) {
 <link rel="apple-touch-icon" href="icon.svg">
 ${swBlock}`;
 
-  // ── Step 3: Insert before </head> ──
-  if (html.includes('</head>')) {
-    html = html.replace('</head>', inject + '\n</head>');
+  // ── Step 3: Insert before </head> (case-insensitive) ──
+  const headCloseMatch = html.match(/<\/head>/i);
+  if (headCloseMatch) {
+    html = html.replace(headCloseMatch[0], inject + '\n' + headCloseMatch[0]);
   } else if (/<body[\s>]/i.test(html)) {
     html = html.replace(/<body[\s>]/i, inject + '\n$&');
   } else {
@@ -1453,10 +1468,13 @@ function validatePack(original, packed) {
   });
 
   // 4. manifest link injected
+  const hasManifest = /rel=["']manifest["']/.test(packed) ||
+                      /rel=manifest/.test(packed) ||
+                      /manifest\.json/.test(packed);
   checks.push({
-    ok: /rel=["']manifest["']/.test(packed),
+    ok: hasManifest,
     label: 'manifest.json 連結注入',
-    detail: /rel=["']manifest["']/.test(packed) ? '✓ 已注入' : '❌ 未找到'
+    detail: hasManifest ? '✓ 已注入' : '❌ 未找到'
   });
 
   // 5. SW register code present
@@ -1605,10 +1623,68 @@ function closeSandbox() {
 }
 
 // ─── GitHub Upload ────────────────────────────────────────
+const GH_STORAGE_KEY = 'pwa_packer_gh';
+
+function ghLoadSaved() {
+  try {
+    const saved = JSON.parse(localStorage.getItem(GH_STORAGE_KEY) || 'null');
+    if (!saved) return;
+    if (saved.user)   document.getElementById('gh-user').value   = saved.user;
+    if (saved.repo)   document.getElementById('gh-repo').value   = saved.repo;
+    if (saved.token)  document.getElementById('gh-token').value  = saved.token;
+    if (saved.branch) document.getElementById('gh-branch').value = saved.branch;
+    document.getElementById('gh-remember').checked = true;
+    document.getElementById('gh-saved-hint').style.display = 'block';
+  } catch(e) {}
+}
+
+function ghSaveIfNeeded() {
+  if (!document.getElementById('gh-remember').checked) return;
+  try {
+    localStorage.setItem(GH_STORAGE_KEY, JSON.stringify({
+      user:   document.getElementById('gh-user').value.trim(),
+      repo:   document.getElementById('gh-repo').value.trim(),
+      token:  document.getElementById('gh-token').value.trim(),
+      branch: document.getElementById('gh-branch').value.trim(),
+    }));
+    document.getElementById('gh-saved-hint').style.display = 'block';
+  } catch(e) {}
+}
+
+function ghToggleRemember() {
+  const on = document.getElementById('gh-remember').checked;
+  if (!on) {
+    ghClearSaved();
+  } else {
+    ghSaveIfNeeded();
+  }
+}
+
+function ghClearSaved() {
+  try { localStorage.removeItem(GH_STORAGE_KEY); } catch(e) {}
+  document.getElementById('gh-remember').checked = false;
+  document.getElementById('gh-saved-hint').style.display = 'none';
+  showToast('🗑 已清除儲存的 GitHub 資料');
+}
+
 function openGitHubPanel() {
   const panel = document.getElementById('gh-panel');
   panel.style.display = panel.style.display === 'none' ? 'block' : 'none';
   if (panel.style.display === 'block') {
+    ghLoadSaved(); // auto-fill saved credentials
+
+    // Auto-fill repo from scope field (e.g. /my-repo/ → my-repo)
+    const scope = document.getElementById('cfg-scope').value.trim();
+    const repoFromScope = scope.replace(/^\/|\/$/g, ''); // strip leading/trailing slashes
+    if (repoFromScope && repoFromScope !== '') {
+      const repoField = document.getElementById('gh-repo');
+      // Only override if field is empty or matches previous scope-derived value
+      if (!repoField.value || repoField.dataset.fromScope) {
+        repoField.value = repoFromScope;
+        repoField.dataset.fromScope = '1';
+      }
+    }
+
     panel.scrollIntoView({ behavior: 'smooth', block: 'start' });
   }
 }
@@ -1695,6 +1771,8 @@ async function uploadToGitHub() {
 
   btn.disabled = false;
   btn.innerHTML = '🚀 一鍵上傳所有檔案';
+
+  ghSaveIfNeeded(); // save if remember is checked
 
   const pagesUrl = 'https://' + user + '.github.io/' + repo + '/';
   resultEl.style.display = 'block';
