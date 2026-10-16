@@ -7,10 +7,6 @@
 ## 說明
 這是 [autopack](https://github.com/kftseng2oo1/autopack) 的另一份，`index.html` 功能幾乎相同（差 67 bytes）。完整功能說明請見 autopack 的 README。
 
-## 檔案
-- `index.html`：目前版本
-- `pwa-packer.html`（約 50 KB）、`index1.html`（約 22 KB）：較舊的版本
-
 ## 主要功能
 - 上傳 HTML，自動產生 `manifest.json`、`sw.js`、`offline.html`、圖示、`README.md`
 - 打包驗證：script 數量、`</body>` 完整性、檔案大小是否異常
